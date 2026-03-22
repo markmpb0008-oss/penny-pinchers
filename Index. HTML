@@ -24,32 +24,22 @@ body.dark .card { background:#1e293b; }
 </style>
 </head>
 
-<body class="max-w-md mx-auto min-h-screen flex flex-col" id="body">
+<body class="max-w-md mx-auto min-h-screen flex flex-col">
 
-<!-- Header -->
-<div class="bg-emerald-600 text-white p-4 flex justify-between items-center">
+<div class="bg-emerald-600 text-white p-4 flex justify-between">
     <h1 class="text-2xl font-bold">Penny Pinchers</h1>
-    <button onclick="toggleDark()" class="bg-white/20 px-3 py-1 rounded">🌙</button>
+    <button onclick="toggleDark()" class="bg-white/20 px-3 py-1 rounded">Dark</button>
 </div>
 
-<!-- Main -->
-<div class="flex-1 p-4 overflow-auto" id="main-screen">
+<div class="flex-1 p-4">
 
 <button onclick="startScan()" 
 class="w-full bg-emerald-600 text-white text-xl py-4 rounded-xl mb-5">
-📸 Scan Barcode
+Scan Barcode
 </button>
 
-<!-- Weekly Deals -->
-<div class="card p-4 rounded-xl mb-5">
-    <h2 class="font-bold mb-2">🔥 Weekly Deals</h2>
-    <div id="deals"></div>
-</div>
-
-<!-- Items -->
 <div id="items-list" class="space-y-3"></div>
 
-<!-- Total -->
 <div id="summary" class="mt-6 card rounded-xl p-4 hidden">
     <p class="text-lg font-semibold">
         Cheapest Total: <span id="total-cheapest" class="text-2xl text-emerald-600"></span>
@@ -62,7 +52,6 @@ class="w-full bg-emerald-600 text-white text-xl py-4 rounded-xl mb-5">
 
 </div>
 
-<!-- Scanner -->
 <div id="scanner-container" class="hidden flex-col">
     <div id="reader" class="w-full h-full"></div>
     <button onclick="stopScan()" 
@@ -71,48 +60,20 @@ class="w-full bg-emerald-600 text-white text-xl py-4 rounded-xl mb-5">
 
 <script>
 
-// Weekly Deals
-const weeklyDeals = [
-    { store:"Aldi", item:"Milk", price:1.79 },
-    { store:"Walmart", item:"Bread", price:1.29 },
-    { store:"Target", item:"Eggs", price:2.49 },
-    { store:"Wegmans", item:"Chicken", price:5.99 }
-];
-
-// Product prices
 const productPrices = {
-    "012345678905": { Aldi:1.49, Walmart:1.69, Target:1.59, Wegmans:2.09 },
-    "041498123456": { Aldi:2.19, Walmart:2.49, Target:2.39, Wegmans:2.99 }
+    "012345678905": { Aldi:1.49, Walmart:1.69, Target:1.59, Wegmans:2.09 }
 };
 
 let scannedItems = JSON.parse(localStorage.getItem("pennyItems")) || [];
 let html5QrCodeScanner = null;
 
-// Render deals
-function renderDeals(){
-    const d = document.getElementById("deals");
-    d.innerHTML = weeklyDeals.map(deal => `
-        <div class="flex justify-between text-sm">
-            <span>${deal.item}</span>
-            <span>${deal.store} - $${deal.price}</span>
-        </div>
-    `).join("");
-}
-
-// Render list
 function renderList(){
     const container = document.getElementById("items-list");
 
     container.innerHTML = scannedItems.map(item => `
         <div class="card border rounded-xl p-3">
             <p class="font-semibold">${item.name}</p>
-            <div class="grid grid-cols-2 gap-1 text-sm mt-2">
-                ${Object.entries(item.prices).map(([store,price]) =>
-                    `<div class="${store===item.cheapestStore ? 'text-emerald-600 font-bold':''}">
-                    ${store}: $${price}
-                    </div>`
-                ).join("")}
-            </div>
+            <p class="text-sm text-emerald-600">${item.store} - $${item.price}</p>
         </div>
     `).join("");
 
@@ -120,7 +81,7 @@ function renderList(){
     const summary = document.getElementById("summary");
 
     if(scannedItems.length>0){
-        const total = scannedItems.reduce((sum,item)=>sum+Number(item.cheapestPrice),0).toFixed(2);
+        const total = scannedItems.reduce((sum,item)=>sum+Number(item.price),0).toFixed(2);
         totalEl.textContent="$"+total;
         summary.classList.remove("hidden");
     } else {
@@ -130,7 +91,6 @@ function renderList(){
     localStorage.setItem("pennyItems", JSON.stringify(scannedItems));
 }
 
-// Fetch product name
 async function fetchProductName(barcode){
     try{
         const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
@@ -141,9 +101,7 @@ async function fetchProductName(barcode){
     }
 }
 
-// Scan
 function startScan(){
-    document.getElementById("main-screen").classList.add("hidden");
     document.getElementById("scanner-container").classList.remove("hidden");
 
     html5QrCodeScanner = new Html5QrcodeScanner("reader",{fps:5, qrbox:250});
@@ -162,16 +120,11 @@ function startScan(){
 
         scannedItems.push({
             name:name,
-            barcode:decodedText,
-            prices:prices,
-            cheapestStore:cheapestStore,
-            cheapestPrice:cheapestPrice
+            price:cheapestPrice,
+            store:cheapestStore
         });
 
         renderList();
-
-        document.getElementById("main-screen").classList.remove("hidden");
-        document.getElementById("scanner-container").classList.add("hidden");
     });
 }
 
@@ -180,6 +133,7 @@ function stopScan(){
         html5QrCodeScanner.clear();
         html5QrCodeScanner=null;
     }
+    document.getElementById("scanner-container").classList.add("hidden");
 }
 
 function clearList(){
@@ -191,8 +145,6 @@ function toggleDark(){
     document.body.classList.toggle("dark");
 }
 
-// Init
-renderDeals();
 renderList();
 
 </script>
