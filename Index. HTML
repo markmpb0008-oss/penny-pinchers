@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Penny Pinchers</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+<style>
+.dark { background:#0f172a; color:white; }
+#scanner-container{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    z-index:50;
+}
+</style>
+</head>
+
+<body class="max-w-md mx-auto min-h-screen flex flex-col" id="body">
+
+<!-- Header -->
+<div class="bg-emerald-600 text-white p-4 flex justify-between items-center">
+    <h1 class="text-2xl font-bold">Penny Pinchers</h1>
+    <button onclick="toggleDark()" class="bg-white/20 px-3 py-1 rounded">🌙</button>
+</div>
+
+<!-- Main -->
+<div class="flex-1 p-4 overflow-auto" id="main-screen">
+
+<button onclick="startScan()" 
+class="w-full bg-emerald-600 text-white text-xl py-4 rounded-xl mb-5">
+📸 Scan Barcode
+</button>
+
+<!-- Weekly Deals -->
+<div class="bg-yellow-100 p-4 rounded-xl mb-5">
+    <h2 class="font-bold mb-2">🔥 Weekly Deals</h2>
+    <div id="deals"></div>
+</div>
+
+<!-- Items -->
+<div id="items-list" class="space-y-3"></div>
+
+<!-- Total -->
+<div id="summary" class="mt-6 bg-gray-100 rounded-xl p-4 hidden">
+    <p class="text-lg font-semibold">
+        Cheapest Total: <span id="total-cheapest" class="text-2xl text-emerald-600"></span>
+    </p>
+    <button onclick="clearList()" 
+    class="mt-3 w-full border border-red-500 text-red-500 py-2 rounded">
+    Clear List
+    </button>
+</div>
+
+</div>
+
+<!-- Scanner -->
+<div id="scanner-container" class="hidden flex-col">
+    <div id="reader" class="w-full h-full"></div>
+    <button onclick="stopScan()" 
+    class="bg-red-600 text-white py-4 text-xl">Cancel</button>
+</div>
+
+<script>
+
+// Weekly Deals
+const weeklyDeals = [
+    { store:"Aldi", item:"Milk", price:1.79 },
+    { store:"Walmart", item:"Bread", price:1.29 },
+    { store:"Target", item:"Eggs", price:2.49 },
+    { store:"Wegmans", item:"Chicken", price:5.99 }
+];
+
+// Example product prices
+const productPrices = {
+    "012345678905": { Aldi:1.49, Walmart:1.69, Target:1.59, Wegmans:2.09 },
+    "041498123456": { Aldi:2.19, Walmart:2.49, Target:2.39, Wegmans:2.99 }
+};
+
+let scannedItems = JSON.parse(localStorage.getItem("pennyItems")) || [];
+let html5QrCodeScanner = null;
+
+// Render weekly deals
+function renderDeals(){
+    const d = document.getElementById("deals");
+    d.innerHTML = weeklyDeals.map(deal => `
+        <div class="flex justify-between text-sm">
+            <span>${deal.item}</span>
+            <span>${deal.store} - $${deal.price}</span>
+        </div>
+    `).join("");
+}
+
+// Render items
+function renderList(){
+    const container = document.getElementById("items-list");
+
+    container.innerHTML = scannedItems.map(item => `
+        <div class="border rounded-xl p-3">
+            <p class="font-semibold">${item.name}</p>
+            <div class="grid grid-cols-2 gap-1 text-sm mt-2">
+                ${Object.entries(item.prices).map(([store,price]) =>
+                    `<div class="${store===item.cheapestStore ? 'text-emerald-600 font-bold':''}">
+                    ${store}: $${price}
+                    </div>`
+                ).join("")}
+            </div>
+        </div>
+    `).join("");
+
+    const totalEl = document.getElementById("total-cheapest");
+    const summary = document.getElementById("summary");
+
+    if(scannedItems.length>0){
+        const total = scannedItems.reduce((sum,item)=>sum+Number(item.cheapestPrice),0).toFixed(2);
+        totalEl.textContent="$"+total;
+        summary.classList.remove("hidden");
+    } else {
+        summary.classList.add("hidden");
+    }
+
+    localStorage.setItem("pennyItems", JSON.stringify(scannedItems));
+}
+
+// Fetch product name
+async function fetchProductName(barcode){
+    try{
+        const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+        const data = await res.json();
+        return data.product?.product_name || "Grocery Item";
+    }catch{
+        return "Grocery Item";
+    }
+}
+
+// Start scan
+function startScan(){
+    document.getElementById("main-screen").classList.add("hidden");
+    document.getElementById("scanner-container").classList.remove("hidden");
+
+    html5QrCodeScanner = new Html5QrcodeScanner("reader",{fps:5, qrbox:250});
+    html5QrCodeScanner.render(async(decodedText)=>{
+        stopScan();
+
+        const name = await fetchProductName(decodedText);
+
+        const prices = productPrices[decodedText] || 
+        { Aldi:1.99, Walmart:2.49, Target:2.29, Wegmans:3.29 };
+
+        const cheapestStore = Object.keys(prices)
+            .reduce((a,b)=>prices[a]<prices[b]?a:b);
+
+        const cheapestPrice = prices[cheapestStore];
+
+        scannedItems.push({
+            name:name,
+            barcode:decodedText,
+            prices:prices,
+            cheapestStore:cheapestStore,
+            cheapestPrice:cheapestPrice
+        });
+
+        renderList();
+
+        document.getElementById("main-screen").classList.remove("hidden");
+        document.getElementById("scanner-container").classList.add("hidden");
+    });
+}
+
+// Stop scan
+function stopScan(){
+    if(html5QrCodeScanner){
+        html5QrCodeScanner.clear();
+        html5QrCodeScanner=null;
+    }
+}
+
+// Clear list
+function clearList(){
+    scannedItems=[];
+    renderList();
+}
+
+// Dark mode
+function toggleDark(){
+    document.getElementById("body").classList.toggle("dark");
+}
+
+// Init
+renderDeals();
+renderList();
+
+</script>
+</body>
+</html>
